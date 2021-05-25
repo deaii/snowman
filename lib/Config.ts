@@ -1,9 +1,13 @@
 
 export interface Config 
 {
-    UseLoDash?: boolean;
-    UseJQuery?: boolean;
+    useLoDash?: boolean | string;
+    useJQuery?: boolean | string;
 
     MaxHistory?: boolean;
-    StartingPassage?: string;
+    startingPassage?: string;
+
+    stateVar?: string;
+    tempVar?: string;
+    layoutHtml?: string;
 }

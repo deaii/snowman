@@ -1,28 +1,34 @@
 
 import type { LoDashStatic } from 'lodash';
-
+import lodash from 'lodash';
 import { Story } from './Story';
 
-import './src/b.css';
-import 'normalize-css/normalize.css';
+import 'bootstrap/dist/css/bootstrap.css';
+
+import { Config } from './Config';
 
 declare global
 {
   interface Window {
-    story: any
+    story: Story;
     marked: any;
-    formdata?: {[key: string]: string};
+    formdata: {[key: string]: string};
+    config: Config;
     _: LoDashStatic;
-    $: JQuery;
   }
 }
 
 $(function () {
+  window.config = {};
+  window.formdata = {};
+
+  window._ = lodash;
+
   const storyData = document.querySelector('tw-storydata') as HTMLElement;
   const storyPassage = document.querySelector('tw-story') as HTMLDivElement;
 
   window.story = new Story(storyData, storyPassage);
-  window.story.start($('tw-story'));
+  window.story.start();
 });
 
 export default 0;

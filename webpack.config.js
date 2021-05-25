@@ -18,6 +18,17 @@ module.exports = {
         use: [MiniCssExtractPlugin.loader, "css-loader"],
       },
       {
+        test: /\.s[ac]ss$/i,
+        use: [
+          // Outputs the result to a file.
+          MiniCssExtractPlugin.loader,
+          // Translates CSS into CommonJS
+          "css-loader",
+          // Compiles Sass to CSS
+          "sass-loader",
+        ],
+      },
+      {
         test: /\.tsx?$/,
         use: 'babel-loader',
         exclude: /node_modules/,
@@ -31,7 +42,8 @@ module.exports = {
     ]
   },
   plugins: [
-    new MiniCssExtractPlugin()
+    new MiniCssExtractPlugin(),
+    require('autoprefixer')
   ],
   resolve: {
     extensions: ['.tsx', '.ts', '.js']

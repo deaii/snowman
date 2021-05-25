@@ -4,21 +4,25 @@
  * @class Passage
  */
 
-import unescape from 'lodash/unescape';
-import escape from 'lodash/escape';
-import template from 'lodash/template';
 import marked from 'marked';
+
+import _unescape from 'lodash/unescape';
+import _escape from 'lodash/escape';
+import _template from 'lodash/template';
 
 const LINK_REGEX = /(\{([^\n}'"]*)})?\[\[(.*?)(\|(.*?))?\s*(\{.*\})?\]\]/gi;
 const LINK_TRIM_REGEX = /\s{2,}/gmi;
 const STYLE_GROUP = 2;
 const DISPLAY_GROUP = 3;
 const PASSAGE_NAME_GROUP = 5;
-const JSON_GROUP = 6;
+const JSON_GROUP = 6
 
 const PASSAGE_REGEX = /^(\s*#!({(.|\n)*?})!#)?((.|\n)*)/i;
 const META_GROUP = 2;
 const PASSAGE_TEXT_GROUP = 4;
+
+export type PassageTags = { [tag: string]: string | true };
+export type PassageMetadata = { [key: string]: any };
 
 export class Passage {
 
@@ -28,87 +32,88 @@ export class Passage {
   id: string;
 
   /**
-   * Name of the passage.
+   * Name of the passage, as specified in Twine
    */
-  name: string;
+  title: string;
 
   /**
-   * Tags.  May be specified as an attribute, or in the meta object in the
-   * passage.
+   * A function that returns the name of the passage based on the current state
+   * of the game.  Specified in metadata.
    */
-  tags: string[];
+  #titleFunc?: (this: Passage) => string;
 
-  #meta?: {[key: string]: any} | null;
+  get renderedTitle(): string {
+    if (this.#titleFunc) {
+      return this.#titleFunc();
+    } else {
+      return this.title;
+    }
+  }
 
-  #text?: string;
+  /**
+   * Tags.  
+   * 
+   * If a tag is supplied in <key>=<value> format, then it is parsed as such.
+   */
+  tags: PassageTags;
+
+  /**
+   * Metadata, given as a JSON object.  Can be used to overwrite the passage's
+   * ID, title, 
+   */
+  meta: PassageMetadata = {};
+
+  text: string = '';
 
   /**
    * The full source code of the passage, after HTML-decoding.
    */
-  #source: string;
+  readonly source: string;
 
-  /**
-   * The text of the passage, after the meta hashbang is removed.
-   */
-  get text(): string {
-    if (!this.#text) {
-      const {text, meta} = extractMeta(this.#source);
-      this.#text = text;
-      this.#meta = meta ? JSON.parse(meta) : null;
-      this.#source = '';
+  constructor(passageEl: Element, preserveSource?: boolean) {
+    const id = passageEl.getAttribute('pid')!;
+    const name = passageEl.getAttribute('name')!;
+    const tags = parseTags(passageEl.getAttribute('tags'));
+    const source = _unescape(passageEl.innerHTML)
+
+    // We can supply the original source as a readonly string for debug purposes, but generally this only takes up unneeded memory.
+    this.source = preserveSource ? source : '';
+
+    // Extract metadata
+    const { text, meta: metaStr } = extractMeta(this.source);
+    this.text = text;
+    const meta = this.meta = !!metaStr
+      ? new Function(`return (${metaStr});`)()
+      : {}
+
+    // Extract passage title
+    const metaTitle = meta['title'];
+    if (typeof metaTitle === 'function') {
+      this.#titleFunc = metaTitle.bind(this);
+      this.title = '';
+    } else if (typeof metaTitle === 'string') {
+      this.title = metaTitle;
+    } else {
+      this.title = name ?? '[unnamed]';
     }
 
-    return this.#text;
-  }
+    this.id = meta['id'] ?? id ?? 1
 
-  /**
-   * A JSON object parsed from the meta hashbang.
-   */
-  get meta(): {[key: string]: any} | null {
-    if (!this.#text) {
-      const {text, meta} = extractMeta(this.#source);
-      this.#text = text;
-      this.#meta = meta ? JSON.parse(meta) : null;
-      this.#source = '';
-    }
-
-    return this.#meta; 
-  }
-
-  constructor(id: string, name: string, tags: string[], source: string) {
-    /**
-     * @property {number} id - id number of passage
-     * @type {number}
-     */
-
-    this.id = id || '1';
-
-    /**
-     * @property {string} name - The name of passage
-     * @type {string}
-     */
-
-    this.name = name || 'Default';
-
-    /**
-     * @property {Array} tags - The tags of the passage.
-     * @type {Array}
-     */
-
-    this.tags = tags || [];
-
-    /**
-     * @property {string} source - The passage source code.
-     * @type {string}
-     */
-    this.#source = unescape(source);
+    this.tags = {
+      ...tags,
+      ...(meta['tags'] ?? {})
+    };
   }
 
   render() {
-    return Passage.renderSource(this.text, this.meta);
+    return Passage.renderSource(this.text, this.tags, this.meta);
   }
 
-  static renderSource(source: string, meta?: {[key: string]: any}){
+  static renderSource(
+    source: string,
+    tags?: PassageTags,
+    meta?: { [key: string]: any },
+  ) {
     // Test if 'source' is defined or not.  If not defined, return an empty
     // string.
     if (!(typeof source !== 'undefined' && source !== null)) {
@@ -117,48 +122,68 @@ export class Passage {
 
     let result = '';
 
-    result = template(source)({ 
-      s: window.story.state, 
+    result = _template(source)({
+      s: window.story.state,
       m: meta,
       _: window._,
-      $: window.$
     });
 
-    /* [[links]] with or without extra markup {#id.class} */
-    result = result.replace(LINK_REGEX, function (...args: string[]) {
-      const style = args[STYLE_GROUP];
-      const display = args[DISPLAY_GROUP];
-      const passage = args[PASSAGE_NAME_GROUP] ?? display;
-      const json = args[JSON_GROUP];
-
-      return `
-        <a href="javascript:void(0)"
-           data-passage="${escape(passage)}
-           data-formdata="${escape(json)}"
-           ${renderAttrs(style)}
-        >
-          ${escape(display)}
-        </a>`.replace(LINK_TRIM_REGEX, ' ');
-    });
-
-    // Prevent template() from triggering markdown code blocks
-    // Skip producing code blocks completely
-    const renderer = new marked.Renderer();
-    renderer.code = function (code) {
-      return code;
-    };
-
-    marked.setOptions({ smartypants: true, renderer: renderer });
-    let newResult = marked(result);
-
-    // Test for new <p> tags from Marked
-    if (!result.endsWith('</p>\n') && newResult.endsWith('</p>\n')) {
-      newResult = newResult.replace(/^<p>|<\/p>$|<\/p>\n$/g, '');
+    if (tags && tags['html']) {
+      return result;
     }
 
-    return newResult;
+    return renderMarkdown(result.trim());
+  }
+
+  getTag(tagName: string): Tag {
+    var tag = this.tags[tagName];
+
+    if (tag === undefined) {
+      return { exists: false, value: '' };
+    }
+
+    return { exists: true, value: tag };
   }
 }
+
+export interface Tag {
+  exists: boolean,
+  value: string | true
+}
+
+function extractMeta(text: string): PassageMetadata {
+  const match = text.match(PASSAGE_REGEX);
+
+  if (match == null) {
+    return { text: "", meta: "" }
+  }
+
+  return {
+    text: match[PASSAGE_TEXT_GROUP] ?? "",
+    meta: match[META_GROUP] ?? ""
+  };
+}
+
+function parseTags(tagsStr: string | null): PassageTags {
+  if (!tagsStr) {
+    return {};
+  }
+
+  const rVal: { [key: string]: string | true } = {};
+
+  tagsStr.split(' ').forEach((str: string) => {
+    const eqIndex = str.indexOf('=');
+
+    if (eqIndex > 0) {
+      rVal[str.substr(0, eqIndex)] = str.substr(eqIndex + 1);
+    } else {
+      rVal[str] = true;
+    }
+  });
+
+  return rVal;
+}
+
 
 /**
  * An internal helper function that converts markup like #id.class into HTML
@@ -171,7 +196,11 @@ export class Passage {
  *  give it a href property that does nothing.
  * @returns {string} HTML source code
  **/
- function renderAttrs(attrs: string): string {
+function renderAttrs(attrs?: string | null): string {
+  if (!attrs) {
+    return '';
+  }
+
   var result = '';
 
   for (var i = 0; attrs[i] === '-' || attrs[i] === '0'; i++) {
@@ -188,9 +217,7 @@ export class Passage {
 
   var classes = [];
   var id = null;
-  /* eslint-disable no-useless-escape */
-  var classOrId = /([#\.])([^#\.]+)/g;
-  /* eslint-enable no-useless-escape */
+  var classOrId = /([#.])([^#.]+)/g;
   var matches = classOrId.exec(attrs);
 
   while (matches !== null) {
@@ -218,15 +245,43 @@ export class Passage {
   return result.trim();
 }
 
-function extractMeta(text: string): {text: string, meta?: string} | null {
-  const match = text.match(PASSAGE_REGEX);
-
-  if (match == null) {
-    return null;
+function renderMarkdown(result: string): string {
+  if (!result) {
+    return '';
   }
 
-  return {
-    text: match[PASSAGE_TEXT_GROUP],
-    meta: match[META_GROUP]
+  /* [[links]] with or without extra markup {#id.class} */
+  result = result.replace(LINK_REGEX, function (...args: string[]) {
+    const style = args[STYLE_GROUP];
+    const display = args[DISPLAY_GROUP];
+    const passage = args[PASSAGE_NAME_GROUP] ?? display;
+    const json = args[JSON_GROUP];
+
+    return `
+      <link
+      <a href="javascript:void(0)"
+         data-passage="${_escape(passage)}
+         data-formdata="${_escape(json)}"
+         ${renderAttrs(style)}
+      >
+        ${_escape(display)}
+      </a>`.replace(LINK_TRIM_REGEX, ' ');
+  });
+
+  // Prevent template() from triggering markdown code blocks
+  // Skip producing code blocks completely
+  const renderer = new marked.Renderer();
+  renderer.code = function (code) {
+    return code;
   };
+
+  marked.setOptions({ smartypants: true, renderer: renderer });
+  let newResult = marked(result);
+
+  // Test for new <p> tags from Marked
+  if (!result.endsWith('</p>\n') && newResult.endsWith('</p>\n')) {
+    newResult = newResult.replace(/^<p>|<\/p>$|<\/p>\n$/g, '');
+  }
+
+  return newResult;
 }

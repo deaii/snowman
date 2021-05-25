@@ -3,6 +3,7 @@
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element|Element}
  */
 
+import { isArray, values } from 'lodash';
 import LZString from 'lz-string';
 import * as qs from 'query-string';
 
@@ -11,6 +12,7 @@ import { passageHidden } from './events/passageHidden';
 import { passageShowing } from './events/passageShowing';
 import { passageShown } from './events/passageShown';
 import { Passage } from './Passage';
+import { CONFIG_TAG, STYLE_TAG, SCRIPT_TAG, LAYOUT_TAG } from './reservedTags';
 
 interface HistorySnapshot {
   state: {[key: string]: any};
@@ -26,7 +28,17 @@ interface HistorySnapshot {
  */
 export class Story {
 
-  #passages: Passage[];
+  #passages: {[id: string]: Passage};
+
+  #passageArray?: Passage[];
+
+  private get _passageArray() {
+    if (!this.#passageArray){
+      this.#passageArray = Object.values(this.#passages).sort((a, b) => a.id.localeCompare(b.id));
+    }
+
+    return this.#passageArray;
+  }
 
   /**
    * The name of the story
@@ -95,15 +107,16 @@ export class Story {
   errorMessage: string = '';
 
   /**
-   * An array of user-specific scripts to run when the story is begun.
+   * An array of user-specific scripts to run when the story is begun.  Scripts
+   * are executed in priority order.
    **/
-  #userScripts: string[];
+  #userScripts: {script: string, priority: number}[];
 
   /**
    * An array of user-specified stylesheets.  These are appended to the browser
-   * document on load.
+   * document on load, in order of priority (in ascending order).
    */
-  #userStyles: string[];
+  #userStyles: {style: string, priority: number}[];
   
   /**
    * The element to render the story to.
@@ -129,35 +142,59 @@ export class Story {
     this.creator = dataEl.getAttribute('creator')!;
     this.creatorVersion = dataEl.getAttribute('creator-version')!;
 
-    // Get the passages from the HTML passage data.
-    this.#passages = [];
-
-    dataEl.querySelectorAll('tw-passagedata').forEach((passageEl) => {
-      const id = passageEl.getAttribute('pid')!;
-      const name = passageEl.getAttribute('name')!;
-      const tags = passageEl.getAttribute('tags');
-
-      this.#passages.push(new Passage(
-        id,
-        name,
-        (!!tags) ? tags.split(' ') : [],
-        passageEl.innerHTML
-      ));
-    });
-
     this.#userScripts = [];
 
     // Add the internal (HTML) contents of all SCRIPT tags
     document.querySelectorAll<HTMLElement>('*[type="text/twine-javascript"]')
-      .forEach(el => { this.#userScripts.push(el.innerHTML); });
+      .forEach(el => { this.#userScripts.push({script: el.innerHTML, priority: 0}); });
 
     this.#userStyles = [];
 
     // Add the internal (HTML) contents of all STYLE tags
     document.querySelectorAll<HTMLElement>('*[type="text/twine-css"]')
-      .forEach(value => { this.#userStyles.push(value.innerHTML); });
+      .forEach(value => { this.#userStyles.push({style: value.innerHTML, priority: 0}); });
+
+    // Used for getting script and style priority.
+    function getPriority(tag: undefined | true | string) {
+      return (tag === true) ? 0 : Number.parseFloat(tag ?? '0');
+    }
+
+    this.#passages = {};
+
+    dataEl.querySelectorAll('tw-passagedata').forEach(e =>  {
+      let passage = new Passage(e);
+      let tags = passage.tags;
+
+      let configTag = tags[CONFIG_TAG];
+      let styleTag = tags[STYLE_TAG];
+      let scriptTag = tags[SCRIPT_TAG];
+      let layoutTag = tags[LAYOUT_TAG];
+
+      if (configTag !== undefined){
+        // Story Configuration
+        Object.assign(window.config, JSON.parse(passage.source));
+      } else if (styleTag !== undefined){
+        // User Style
+        this.#userStyles.push({style: passage.source, priority: getPriority(styleTag)});
+      } else if (scriptTag !== undefined){
+        // User JavaScript
+        this.#userScripts.push({ script: passage.source, priority: getPriority(scriptTag)});
+      } else if (layoutTag !== undefined){
+        // Layout
+        //// TODO:
+      }else {
+        // Actual Passage
+        this.#passages[passage.id] = passage;
+      }
+    });
+
+    this.#userScripts.sort((a, b) => (a.priority - b.priority));
+    this.#userStyles.sort((a, b) => (a.priority - b.priority));
 
     // TODO: Setup Story Errors
+    window.addEventListener('error', (e: ErrorEvent) => {
+
+    });
   }
 
   get hasHistory() {
@@ -175,14 +212,13 @@ export class Story {
 
     const {state, passage} = this.history.pop()!;
     this.state = state;
-
   }
 
   pushHistory(){
     this.history.push({
       state: this.state,
       meta: this.meta,
-      passage: this.passage.name
+      passage: this.passage.id
     })
   }
 
@@ -203,14 +239,14 @@ export class Story {
 
   start () {
     /* Activate user styles. */
-    this.#userStyles.forEach((style) => {
+    this.#userStyles.forEach(({style}) => {
       const styleEl = document.createElement('style');
       styleEl.innerHTML = style;
       this.bodyEl.appendChild(styleEl);
     });
 
     /* Run user scripts. */
-    this.#userScripts.forEach((script: string) => {
+    this.#userScripts.forEach(({script}) => {
       try {
         /* eslint-disable no-eval */
         eval(script);
@@ -345,10 +381,11 @@ export class Story {
   }
 
   getPassage(idOrName: string): Passage | null{
-    let passage = this.#passages.find(p => p.id == idOrName);
+
+    let passage = this.#passages[idOrName];
 
     if (!passage){
-      passage = this.#passages.find(p => p.name == idOrName);
+      passage = this._passageArray.find(p => p.title == idOrName);
     }
 
     return passage ?? null;
