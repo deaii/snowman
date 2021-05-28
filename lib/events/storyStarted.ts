@@ -1,6 +1,8 @@
 import type { Story } from '../Story';
+import { EventBus } from './EventBus';
 
-export const STORY_START = 'sm.story.start';
+export type StoryStart = 'sm.story.start';
+export const STORY_START: StoryStart = 'sm.story.start';
 
 export class StoryStartEvent extends Event {
     readonly story: Story;
@@ -10,10 +12,10 @@ export class StoryStartEvent extends Event {
     }
 }
 
+const _eventBus = new EventBus<StoryStart, StoryStartEvent, Window>(STORY_START, window)
+
 export function storyStarted(story: Story) {
     window.dispatchEvent(new StoryStartEvent(story));
 }
 
-export function onStoryStarted(fn: (ev: StoryStartEvent) => void) {
-    window.addEventListener(STORY_START, fn as EventListener);
-}
+export const onStoryStarted = _eventBus.addListener.bind(_eventBus);

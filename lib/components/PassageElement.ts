@@ -1,28 +1,23 @@
-import _ from "lodash";
-import { onPassageShown } from "../events/passageShown";
+import { Passage } from "../Passage";
 
-export class PassageElement extends HTMLDivElement {
-    constructor() {
+export class MarkdownElement extends HTMLSpanElement {
+    public constructor() {
         super();
 
-        const self = this;
+        for (let i = 0; i < this.childNodes.length; i++){
+            const node = this.childNodes[i]!;
+            if (node.nodeType == this.TEXT_NODE){
+                const span = document.createElement('span');
+                span.className = 'sm-md';
+                span.innerHTML = Passage.renderMarkdown(node.textContent || '');
 
-        onPassageShown(() => {
-            const {passage: passageName, meta: metaStr} = this.dataset;
-
-            const passage = (passageName && passageName !== "$current")
-                ? window.story.getPassage(passageName)
-                : window.story.passage;
-
-            if (passage){
-                this.innerHTML = passage.render();
-            }else{
-                this.innerHTML = `<div class="alert alert-warning" role="alert">Could not find passage "${passageName}".</div>`
+                this.replaceChild(span, node);
             }
-        });
+        }
     }
 }
 
-export function setupPassages() {
-    customElements.define("passage", PassageElement);
+export function setupMarkdown() {
+    customElements.define('markdown', MarkdownElement);
 }
+

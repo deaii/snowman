@@ -157,5 +157,5 @@ function breakText(textNode: Node, parent: Node, className: string): HTMLSpanEle
 }
 
 export function enableTypewriter() {
-    customElements.define('typewriter', TypewriterElement, { extends: 'div' });
+    customElements.define('typewriter', TypewriterElement);
 }

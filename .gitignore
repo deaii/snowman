@@ -4,6 +4,9 @@ pids
 *.seed
 *.pid.lock
 
+# temporary build directory
+build/
+
 # nyc test coverage
 .nyc_output
 

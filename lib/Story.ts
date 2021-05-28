@@ -3,21 +3,27 @@
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element|Element}
  */
 
-import { isArray, values } from 'lodash';
 import LZString from 'lz-string';
 import * as qs from 'query-string';
 
-import { storyStarted } from './events';
-import { passageHidden } from './events/passageHidden';
-import { passageShowing } from './events/passageShowing';
-import { passageShown } from './events/passageShown';
+import { passageHidden, passageShowing, passageShown, storyStarted } from './events';
 import { Passage } from './Passage';
 import { CONFIG_TAG, STYLE_TAG, SCRIPT_TAG, LAYOUT_TAG } from './reservedTags';
 
+import { AnyMap, StoryState, StoryStateImpl } from './StoryState';
+
 interface HistorySnapshot {
-  state: {[key: string]: any};
-  meta: {[key: string]: any};
+  state: AnyMap;
+  meta: AnyMap;
   passage: string;
+}
+
+interface SaveState {
+  state: AnyMap, 
+  passageName: string, 
+  meta: AnyMap, 
+  globals: AnyMap, 
+  history: (HistorySnapshot| null)[]
 }
 
 /**
@@ -60,6 +66,15 @@ export class Story {
    */
   #passage?: Passage;
 
+  /**
+   * The current state of the game.
+   */
+  #state: StoryState = new StoryStateImpl();
+
+  public get state() {
+    return this.#state;
+  }
+
   get passage() {
     if (this.#passage){
       return this.#passage;
@@ -84,21 +99,10 @@ export class Story {
   history: (HistorySnapshot | null)[] = [];
 
   /**
-   * The current state of the story.  This persists when the user reloads.
-   */
-  state: {[key: string]: any} = {};
-
-  /**
    * A blob containing information sent to the passage, either via form or link
    * attributes.
    */
   meta: {[key:string]: any} = {};
-
-  /**
-   * Variables that exist outside of the story.  These are not affected by
-   * movement through the story history.
-   */
-  globals: {[key: string]: any} = {};
 
   /**
    * The message shown to users when there is an error and ignoreErrors is not
@@ -118,23 +122,7 @@ export class Story {
    */
   #userStyles: {style: string, priority: number}[];
   
-  /**
-   * The element to render the story to.
-   */
-  readonly bodyEl: HTMLDivElement;
-
-  readonly passageEl: HTMLDivElement;
-
-  constructor (dataEl: HTMLElement, bodyEl: HTMLDivElement) {
-
-    this.bodyEl = bodyEl;
-
-    // Create the passage element
-    this.passageEl = document.createElement('div');
-    this.passageEl.className = "sm-passage";
-    this.passageEl.setAttribute('aria-live', 'polite');
-    this.bodyEl.appendChild(this.passageEl);
-
+  constructor (dataEl: HTMLElement) {
     // Get the story metadata.
     this.name = dataEl.getAttribute('name')!;
     this.ifid = dataEl.getAttribute('ifid')!;
@@ -190,11 +178,6 @@ export class Story {
 
     this.#userScripts.sort((a, b) => (a.priority - b.priority));
     this.#userStyles.sort((a, b) => (a.priority - b.priority));
-
-    // TODO: Setup Story Errors
-    window.addEventListener('error', (e: ErrorEvent) => {
-
-    });
   }
 
   get hasHistory() {
@@ -202,21 +185,39 @@ export class Story {
   }
 
   popHistory() {
+    // If there is no history, then restart the game.
     if (this.hasHistory){
-      return;
+      this.state.s = {};
+      this.show(this.startPassage)
     }
 
+    // Discard the top of the history stack.  If it is the current
+    // passage, this will force us one back.  Otherwise, the
+    // top of the stack is a null object, and needs to be discarded.
+    this.history.pop();
+
+    // Remove any consecutive null entries.
     while (!this.history[this.history.length - 1]){
       this.history.pop();
     }
 
-    const {state, passage} = this.history.pop()!;
-    this.state = state;
+    // If no history remains, again, restart the game.
+    if (this.history.length == 0){
+      this.state.s = {};
+      this.show(this.startPassage);
+    }
+
+    // Otherwise, resume from the next entry in the history.
+    // We pop the history here: show() will push it back on.
+    const {state, meta, passage} = this.history.pop()!;
+    this.state.s = state;
+
+    this.show(passage, meta);
   }
 
   pushHistory(){
     this.history.push({
-      state: this.state,
+      state: this.state.s,
       meta: this.meta,
       passage: this.passage.id
     })
@@ -231,86 +232,32 @@ export class Story {
 
   /**
    * Begins playing this story.
-   *
-   * @function start
-   * @param {Element} el - Element to show content in
-   * @returns {void}
    **/
-
-  start () {
-    /* Activate user styles. */
+  start(): void {
+    //
+    // Activate user styles.
+    //
     this.#userStyles.forEach(({style}) => {
       const styleEl = document.createElement('style');
       styleEl.innerHTML = style;
-      this.bodyEl.appendChild(styleEl);
+      document.head.appendChild(styleEl);
     });
 
-    /* Run user scripts. */
+    this.#userStyles = [];
+
+    // TODO: I'll convert this to a script tag or Function() call at some point.
+    //
+    // Run user scripts
+    //
     this.#userScripts.forEach(({script}) => {
-      try {
-        /* eslint-disable no-eval */
-        eval(script);
-        /* eslint-enable no-eval */
-      } catch (error) {
-        // TODO: Story Error
-        ////$.event.trigger('sm.story.error', [error, 'Story JavaScript Eval()']);
-      }
+      /* eslint-disable no-eval */
+      eval(script);
+      /* eslint-enable no-eval */
     });
+
+    this.#userScripts = [];
 
     const self = this;
-
-    // Set up link click handler.
-    this.bodyEl.addEventListener('click', (e: MouseEvent) => {
-      var target = e.target as HTMLElement;
-
-      if ((target.tagName == 'A') && target.dataset && target.dataset['passage']){
-        e.stopPropagation();
-        const {passage, meta} = target.dataset;
-        const metaJson = meta ? JSON.parse(unescape(meta)) : null;
-        self.show(unescape(passage), metaJson);
-      }
-    });
-
-    this.bodyEl.addEventListener('submit', (e: Event) => {
-      e.preventDefault();
-
-      const submitter = (e as any).submitter as HTMLInputElement;
-      if (!submitter){
-        throw new Error("SubmitEvent had no submitter.  IE/Safari?");
-      }
-
-      const form = submitter.form;
-
-      if (!form){
-        throw new Error("SubmitEvent target has no form ref.");
-      }
-
-      const passage = form.dataset['passage'];
-
-      if (!passage){
-        throw new Error("Form has no 'data-passage' attribute");
-      }
-
-      const meta: {[key: string]: any} = {};
-      new FormData(form).forEach((value, key) => {
-        // If the object doesn't contain the key, add
-        // the object.
-        if(!Reflect.has(meta, key)){
-            meta[key] = value;
-            return;
-        }
-
-        // Otherwise, assume the value needs to be an 
-        // array, convert if needed, and append.
-        if(!Array.isArray(meta[key])){
-            meta[key] = [meta[key]];    
-        }
-
-        meta[key].push(value);
-      });
-
-      self.show(passage, meta);
-    });
 
     storyStarted(this);
 
@@ -360,8 +307,6 @@ export class Story {
     this.#passage = passage;
     this.meta = meta ?? {};
 
-    this.passageEl.innerHTML = passage.render();
-
     passageShown(this, passage, meta);
   }
 
@@ -392,14 +337,14 @@ export class Story {
   }
 
   /**
-   * Sets the URL hash property to the hash value created by saveHash().
-   *
-   * @function save
-   * @param {string} hash - Hash to set URL
-   * @returns {void} - Returns nothing
+   * Save the current state of the game to local storage.
+   * @param slotName the name of the save slot.  Defaults to, well, 'default'.
    */
-  save (hash: string) {
-    localStorage.setItem(this.ifid, hash);
+  save (slotName?: string): void {
+    localStorage.setItem(
+      `save_${this.ifid}_${slotName ?? 'default'}`,
+      this.saveHash(),
+    );
   }
 
   /**
@@ -409,19 +354,15 @@ export class Story {
    * @returns {string} - Returns the LZString hash
    */
   saveHash (): string {
-    const hash = LZString.compressToUTF16(JSON.stringify({
-      state: this.state,
+    const save: SaveState = {
+      state: this.state.s,
+      globals: this.state.g,
       passageName: this.passage.id,
       meta: this.meta,
       history: this.history,
-      globals: this.globals,
-    }));
+    };
 
-    this.save(hash);
-
-    // TODO: Save Event
-
-    return hash;
+    return LZString.compressToUTF16(JSON.stringify(save));
   }
 
   /**
@@ -432,17 +373,27 @@ export class Story {
    * @returns {boolean} if the restore succeeded
    */
 
-  restore (hash: string): void {
-    const {state, passageName, meta, globals, history }
-        = JSON.parse(LZString.decompressFromUTF16(hash)!);
+  restore (slotName: string): void {
+    const hash = localStorage.getItem(`save_${this.ifid}_${slotName ?? 'default'}`);
 
-    this.state = state;
+    if (!hash) {
+      return;;
+    }
+
+    const { 
+      state, 
+      passageName, 
+      meta, 
+      globals, 
+      history, 
+    } = JSON.parse(LZString.decompressFromUTF16(hash)!) as SaveState;
+
+    this.state.s = state;
     this.#passage = this.getPassage(passageName)!;
     this.meta = meta;
-    this.globals = globals;
+    this.state.g = globals;
     this.history = history;
 
-    this.passageEl.innerHTML = this.passage.render();
     passageShown(this, this.passage, meta);
   }
 

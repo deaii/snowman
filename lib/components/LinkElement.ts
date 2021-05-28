@@ -1,7 +1,5 @@
-import _unescape from 'lodash/unescape';
-
 //
-// <link passage="passageName" meta="{&quot;cheese&quot;=true}" persist="true" />
+// <game-link passage="passageName" meta="{&quot;cheese&quot;=true}" persist="true" />
 //
 export class LinkElement extends HTMLButtonElement {
     #passage: string;
@@ -51,5 +49,5 @@ export class LinkElement extends HTMLButtonElement {
 }
 
 export function setupLinks() {
-    customElements.define('link', LinkElement);
+    customElements.define('game-link', LinkElement);
 }

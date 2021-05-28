@@ -4,12 +4,6 @@
  * @class Passage
  */
 
-import marked from 'marked';
-
-import _unescape from 'lodash/unescape';
-import _escape from 'lodash/escape';
-import _template from 'lodash/template';
-
 const LINK_REGEX = /(\{([^\n}'"]*)})?\[\[(.*?)(\|(.*?))?\s*(\{.*\})?\]\]/gi;
 const LINK_TRIM_REGEX = /\s{2,}/gmi;
 const STYLE_GROUP = 2;
@@ -74,7 +68,7 @@ export class Passage {
     const id = passageEl.getAttribute('pid')!;
     const name = passageEl.getAttribute('name')!;
     const tags = parseTags(passageEl.getAttribute('tags'));
-    const source = _unescape(passageEl.innerHTML)
+    const source = window._.unescape(passageEl.innerHTML)
 
     // We can supply the original source as a readonly string for debug purposes, but generally this only takes up unneeded memory.
     this.source = preserveSource ? source : '';
@@ -113,7 +107,7 @@ export class Passage {
     source: string,
     tags?: PassageTags,
     meta?: { [key: string]: any },
-  ) {
+  ): string {
     // Test if 'source' is defined or not.  If not defined, return an empty
     // string.
     if (!(typeof source !== 'undefined' && source !== null)) {
@@ -122,18 +116,55 @@ export class Passage {
 
     let result = '';
 
-    result = _template(source)({
-      s: window.story.state,
-      m: meta,
-      _: window._,
-    });
+    result = window._.template(source)(window.story.state);
 
     if (tags && tags['html']) {
       return result;
     }
 
-    return renderMarkdown(result.trim());
+    return Passage.renderMarkdown(result.trim());
   }
+
+  static renderMarkdown(result: string): string {
+    if (!result) {
+      return '';
+    }
+
+    /* [[links]] with or without extra markup {#id.class} */
+    result = result.replace(LINK_REGEX, function (...args: string[]) {
+      const style = args[STYLE_GROUP];
+      const display = args[DISPLAY_GROUP];
+      const passage = args[PASSAGE_NAME_GROUP] ?? display;
+      const json = args[JSON_GROUP];
+
+      return /*html*/`
+        <game-link
+           passage="${window._.escape(passage)}"
+           formdata="${window._.escape(json)}"
+           ${renderAttrs(style)}
+        >
+          ${window._.escape(display)}
+        </a>`.replace(LINK_TRIM_REGEX, ' ');
+    });
+
+    // Prevent template() from triggering markdown code blocks
+    // Skip producing code blocks completely
+    const renderer = new window.marked.Renderer();
+    renderer.code = function (code) {
+      return code;
+    };
+
+    window.marked.setOptions({ smartypants: true, renderer: renderer });
+    let newResult = window.marked(result);
+
+    // Test for new <p> tags from Marked
+    if (!result.endsWith('</p>\n') && newResult.endsWith('</p>\n')) {
+      newResult = newResult.replace(/^<p>|<\/p>$|<\/p>\n$/g, '');
+    }
+
+    return newResult;
+  }
+
 
   getTag(tagName: string): Tag {
     var tag = this.tags[tagName];
@@ -245,43 +276,3 @@ function renderAttrs(attrs?: string | null): string {
   return result.trim();
 }
 
-function renderMarkdown(result: string): string {
-  if (!result) {
-    return '';
-  }
-
-  /* [[links]] with or without extra markup {#id.class} */
-  result = result.replace(LINK_REGEX, function (...args: string[]) {
-    const style = args[STYLE_GROUP];
-    const display = args[DISPLAY_GROUP];
-    const passage = args[PASSAGE_NAME_GROUP] ?? display;
-    const json = args[JSON_GROUP];
-
-    return `
-      <link
-      <a href="javascript:void(0)"
-         data-passage="${_escape(passage)}
-         data-formdata="${_escape(json)}"
-         ${renderAttrs(style)}
-      >
-        ${_escape(display)}
-      </a>`.replace(LINK_TRIM_REGEX, ' ');
-  });
-
-  // Prevent template() from triggering markdown code blocks
-  // Skip producing code blocks completely
-  const renderer = new marked.Renderer();
-  renderer.code = function (code) {
-    return code;
-  };
-
-  marked.setOptions({ smartypants: true, renderer: renderer });
-  let newResult = marked(result);
-
-  // Test for new <p> tags from Marked
-  if (!result.endsWith('</p>\n') && newResult.endsWith('</p>\n')) {
-    newResult = newResult.replace(/^<p>|<\/p>$|<\/p>\n$/g, '');
-  }
-
-  return newResult;
-}

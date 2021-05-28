@@ -39,7 +39,12 @@ module.exports = {
     minimizer: [
       new TerserPlugin(),
       new CssMinimizerPlugin(),
-    ]
+    ],
+  },
+  externals: {
+    jquery: 'jquery',
+    lodash: 'lodash',
+    bootstrap: 'bootstrap'
   },
   plugins: [
     new MiniCssExtractPlugin(),

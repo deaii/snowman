@@ -1,5 +1,5 @@
-
-import { Modal } from 'bootstrap';
+import type {Modal} from 'bootstrap';
+import { onPassageShown } from '../events/passageShown';
 
 const MODAL_ID = "sm-modal";
 const MODAL_TITLE_ID = "sm-modal-title";
@@ -12,7 +12,6 @@ let _footer: HTMLDivElement;
 let _modalEl: HTMLDivElement;
 let _modal: Modal;
 
-
 export class ModalLinkElement extends HTMLButtonElement
 {
     constructor() {
@@ -21,7 +20,12 @@ export class ModalLinkElement extends HTMLButtonElement
     }
 
     onClickEvent(ev: MouseEvent) {
-        let {header, footer, body, passage, headerPsg, footerPsg} = this.dataset;
+        let header = this.getAttribute("header");
+        let footer = this.getAttribute("footer");
+        let body = this.getAttribute("body");
+        const passage = this.getAttribute("passage");
+        const headerPsg = this.getAttribute("header-passage");
+        const footerPsg = this.getAttribute("footer-passage");
 
         if (passage) {
             body = window.story.getPassage(passage)?.render()
@@ -50,9 +54,14 @@ export class ModalLinkElement extends HTMLButtonElement
 export function setupModal() {
     customElements.define('modal-link', ModalLinkElement);
 
-    document.addEventListener('load', () => {
+    // This needs to be loaded after Bootstrap.
+    window.addEventListener('load', () => {
+        // Make sure the modal hides when a new passage is shown.
+        onPassageShown(() => _modal.hide());
+
+        // Set up our private variables.
         _modalEl = document.getElementById(MODAL_ID) as HTMLDivElement;
-        _modal = new Modal(_modalEl);
+        _modal = new window.bootstrap.Modal(_modalEl);
         _title = document.getElementById(MODAL_TITLE_ID) as HTMLHeadingElement;
         _body = document.getElementById(MODAL_BODY_ID) as HTMLDivElement;
         _footer = document.getElementById(MODAL_FOOTER_ID) as HTMLDivElement;

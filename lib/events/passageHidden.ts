@@ -1,7 +1,9 @@
 import type { Passage } from "../Passage";
 import type { Story } from "../Story";
+import { EventBus } from "./EventBus";
 
-export const PASSAGE_HIDDEN = 'sm.passage.hidden';
+type PassageHiddenName = 'sm.passage.hidden';
+export const PASSAGE_HIDDEN: PassageHiddenName = 'sm.passage.hidden';
 
 export class PassageHiddenEvent extends Event {
     readonly passage: Passage;
@@ -17,6 +19,8 @@ export class PassageHiddenEvent extends Event {
     }
 }
 
+const _eventBus = new EventBus<PassageHiddenName, PassageHiddenEvent, Window>(PASSAGE_HIDDEN, window);
+
 export function passageHidden(
     story: Story, 
     passage: Passage, 
@@ -24,6 +28,4 @@ export function passageHidden(
     window.dispatchEvent(new PassageHiddenEvent(story, passage));
 }
 
-export function onPassageHidden(fn: (ev: PassageHiddenEvent) => void) {
-    window.addEventListener(PASSAGE_HIDDEN, fn as EventListener);
-}
+export const onPassageHidden = _eventBus.addListener.bind(_eventBus);

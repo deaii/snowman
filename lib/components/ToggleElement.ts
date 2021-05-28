@@ -28,7 +28,6 @@ export class ToggleElement extends HTMLDivElement {
 
         this.#innerInput = body.querySelector('input') as HTMLInputElement;
         this.#innerInput.name = name;
-        this.#innerInput.value = 
         this.#innerInput.id = switchId;
     }
 
@@ -38,6 +37,10 @@ export class ToggleElement extends HTMLDivElement {
 
     set value(val: string) {
         this.#innerInput.value = val;
+    }
+
+    reset() {
+
     }
 }
 

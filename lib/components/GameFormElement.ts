@@ -1,4 +1,3 @@
-import _ from "lodash";
 
 // <game-form passage="passageName">...</game-form>
 export class GameFormElement extends HTMLFormElement {
@@ -17,10 +16,23 @@ export class GameFormElement extends HTMLFormElement {
             const meta: {[key: string]: any} = {};
 
             new FormData(self).forEach((value, key) => {
-                _.set(meta, key, value);
+                window._.set(meta, key, value);
             });
 
             window.story.show(self.#passage, meta);
+        }
+    }
+
+    // When connected to the DOM, update every input in the form that has the
+    // 'data-src' attribute.
+    connectedCallback() {
+        if (this.isConnected) {
+            this.querySelectorAll('input').forEach(input => {
+                const src = input.dataset['src'];
+                if (!!src){
+                    input.value = `${window._.get(window.story.state, src)}`;
+                }
+            })
         }
     }
 }
