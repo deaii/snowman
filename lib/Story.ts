@@ -1,16 +1,25 @@
-/**
- * @external Element
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Element|Element}
- */
-
+import { isArray } from 'lodash';
 import LZString from 'lz-string';
 import * as qs from 'query-string';
 
-import { passageHidden, passageShowing, passageShown, storyStarted } from './events';
-import { Passage } from './Passage';
-import { CONFIG_TAG, STYLE_TAG, SCRIPT_TAG, LAYOUT_TAG } from './reservedTags';
+import {
+  passageHidden,
+  passageShowing,
+  passageShown,
+  storyStarted,
+} from './events';
+
+import Passage from './Passage';
+
+import {
+  CONFIG_TAG,
+  STYLE_TAG,
+  SCRIPT_TAG,
+  LAYOUT_TAG,
+} from './reservedTags';
 
 import { AnyMap, StoryState, StoryStateImpl } from './StoryState';
+import SortedArray from './util/SortedArray';
 
 interface HistorySnapshot {
   state: AnyMap;
@@ -19,11 +28,21 @@ interface HistorySnapshot {
 }
 
 interface SaveState {
-  state: AnyMap, 
-  passageName: string, 
-  meta: AnyMap, 
-  globals: AnyMap, 
+  state: AnyMap,
+  passageName: string,
+  meta: AnyMap,
+  globals: AnyMap,
   history: (HistorySnapshot| null)[]
+}
+
+interface UserScript {
+  script: string;
+  order: number;
+}
+
+interface UserStyle {
+  style: string;
+  order: number;
 }
 
 /**
@@ -32,19 +51,8 @@ interface SaveState {
  *
  * @class Story
  */
-export class Story {
-
-  #passages: {[id: string]: Passage};
-
-  #passageArray?: Passage[];
-
-  private get _passageArray() {
-    if (!this.#passageArray){
-      this.#passageArray = Object.values(this.#passages).sort((a, b) => a.id.localeCompare(b.id));
-    }
-
-    return this.#passageArray;
-  }
+export default class Story {
+  #passages: { [id: string]: Passage };
 
   /**
    * The name of the story
@@ -76,11 +84,11 @@ export class Story {
   }
 
   get passage() {
-    if (this.#passage){
+    if (this.#passage) {
       return this.#passage;
     }
 
-    throw new Error("No passage loaded");
+    throw new Error('No passage loaded');
   }
 
   /**
@@ -102,27 +110,27 @@ export class Story {
    * A blob containing information sent to the passage, either via form or link
    * attributes.
    */
-  meta: {[key:string]: any} = {};
+  meta: { [key:string]: any } = {};
 
   /**
    * The message shown to users when there is an error and ignoreErrors is not
    * true.
-   **/
+   * */
   errorMessage: string = '';
 
   /**
    * An array of user-specific scripts to run when the story is begun.  Scripts
    * are executed in priority order.
-   **/
-  #userScripts: {script: string, priority: number}[];
+   * */
+  #userScripts: SortedArray<UserScript> = new SortedArray((a, b) => a.order - b.order);
 
   /**
    * An array of user-specified stylesheets.  These are appended to the browser
    * document on load, in order of priority (in ascending order).
    */
-  #userStyles: {style: string, priority: number}[];
-  
-  constructor (dataEl: HTMLElement) {
+  #userStyles: SortedArray<UserStyle> = new SortedArray((a, b) => a.order - b.order);
+
+  constructor(rootDocument: ParentNode, dataEl: HTMLElement, skipLoad?: boolean) {
     // Get the story metadata.
     this.name = dataEl.getAttribute('name')!;
     this.ifid = dataEl.getAttribute('ifid')!;
@@ -130,138 +138,178 @@ export class Story {
     this.creator = dataEl.getAttribute('creator')!;
     this.creatorVersion = dataEl.getAttribute('creator-version')!;
 
-    this.#userScripts = [];
+    if (!skipLoad) {
+      this.load(rootDocument, dataEl);
+    }
 
+    this.#passages = {};
+  }
+
+  load(dataEl: ParentNode, root: ParentNode = document) {
     // Add the internal (HTML) contents of all SCRIPT tags
-    document.querySelectorAll<HTMLElement>('*[type="text/twine-javascript"]')
-      .forEach(el => { this.#userScripts.push({script: el.innerHTML, priority: 0}); });
-
-    this.#userStyles = [];
+    root.querySelectorAll<HTMLElement>('*[type="text/twine-javascript"]')
+      .forEach((el) => { this.#userScripts.push({ script: el.innerHTML, order: 0 }); });
 
     // Add the internal (HTML) contents of all STYLE tags
-    document.querySelectorAll<HTMLElement>('*[type="text/twine-css"]')
-      .forEach(value => { this.#userStyles.push({style: value.innerHTML, priority: 0}); });
+    root.querySelectorAll<HTMLElement>('*[type="text/twine-css"]')
+      .forEach((value) => { this.#userStyles.push({ style: value.innerHTML, order: 0 }); });
 
     // Used for getting script and style priority.
     function getPriority(tag: undefined | true | string) {
       return (tag === true) ? 0 : Number.parseFloat(tag ?? '0');
     }
 
-    this.#passages = {};
+    dataEl.querySelectorAll('tw-passagedata').forEach((e) => {
+      const passage = new Passage(e);
+      const { tags } = passage;
 
-    dataEl.querySelectorAll('tw-passagedata').forEach(e =>  {
-      let passage = new Passage(e);
-      let tags = passage.tags;
+      const configTag = tags[CONFIG_TAG];
+      const styleTag = tags[STYLE_TAG];
+      const scriptTag = tags[SCRIPT_TAG];
+      const layoutTag = tags[LAYOUT_TAG];
 
-      let configTag = tags[CONFIG_TAG];
-      let styleTag = tags[STYLE_TAG];
-      let scriptTag = tags[SCRIPT_TAG];
-      let layoutTag = tags[LAYOUT_TAG];
-
-      if (configTag !== undefined){
+      if (configTag !== undefined) {
         // Story Configuration
         Object.assign(window.config, JSON.parse(passage.source));
-      } else if (styleTag !== undefined){
+      } else if (styleTag !== undefined) {
         // User Style
-        this.#userStyles.push({style: passage.source, priority: getPriority(styleTag)});
-      } else if (scriptTag !== undefined){
+        this.#userStyles.push({ style: passage.source, order: getPriority(styleTag) });
+      } else if (scriptTag !== undefined) {
         // User JavaScript
-        this.#userScripts.push({ script: passage.source, priority: getPriority(scriptTag)});
-      } else if (layoutTag !== undefined){
+        this.#userScripts.push({ script: passage.source, order: getPriority(scriptTag) });
+      } else if (layoutTag !== undefined) {
         // Layout
-        //// TODO:
-      }else {
+        /// / TODO:
+      } else {
         // Actual Passage
         this.#passages[passage.id] = passage;
       }
     });
-
-    this.#userScripts.sort((a, b) => (a.priority - b.priority));
-    this.#userStyles.sort((a, b) => (a.priority - b.priority));
   }
 
   get hasHistory() {
+    if (this.history.length === 0) {
+      return false;
+    }
+
+    const firstPage = this.history.findIndex((v) => !!v);
+
+    if ((firstPage === -1) || (firstPage === (this.history.length - 1))) {
+      return false;
+    }
+
     return this.history.length > 0;
   }
 
-  popHistory() {
+  get lastCheckpointIndex(): number {
     // If there is no history, then restart the game.
-    if (this.hasHistory){
-      this.state.s = {};
-      this.show(this.startPassage)
+    if (this.history.length <= 1) {
+      return -1;
     }
 
-    // Discard the top of the history stack.  If it is the current
-    // passage, this will force us one back.  Otherwise, the
-    // top of the stack is a null object, and needs to be discarded.
-    this.history.pop();
-
-    // Remove any consecutive null entries.
-    while (!this.history[this.history.length - 1]){
-      this.history.pop();
+    // Step back through the history, skipping the most recent entry (since
+    // that's the currently displayed passage.)
+    for (let i = this.history.length - 2; i >= 0; i -= 1) {
+      if (this.history[i]) {
+        return i;
+      }
     }
 
-    // If no history remains, again, restart the game.
-    if (this.history.length == 0){
-      this.state.s = {};
-      this.show(this.startPassage);
-    }
-
-    // Otherwise, resume from the next entry in the history.
-    // We pop the history here: show() will push it back on.
-    const {state, meta, passage} = this.history.pop()!;
-    this.state.s = state;
-
-    this.show(passage, meta);
+    return -1;
   }
 
-  pushHistory(){
+  popHistory(): void {
+    const lastCp = this.lastCheckpointIndex;
+
+    if (lastCp < 0) {
+      this.reset();
+    } else {
+      // Resume from this point, resetting the state of the
+      // passage and history.
+      const { state, meta, passage } = this.history[lastCp]!;
+
+      // Yes, this removes the snapshot we got above.  It
+      // will be pushed back on in show(...)
+      this.history.splice(lastCp);
+
+      // And here we go.
+      this.#state.s = state;
+      this.show(passage, meta);
+    }
+  }
+
+  pushHistory() {
     this.history.push({
       state: this.state.s,
       meta: this.meta,
-      passage: this.passage.id
-    })
+      passage: this.passage.id,
+    });
   }
 
-  pushEmptyHistory(){
+  pushEmptyHistory() {
     const len = this.history.length;
-    if ((len > 0) && this.history[len - 1]){
+    if ((len > 0) && this.history[len - 1]) {
       this.history.push(null);
     }
   }
 
+  reset() {
+    this.state.s = {};
+    this.history = [];
+    this.show(this.startPassage);
+  }
+
   /**
    * Begins playing this story.
-   **/
+   * */
   start(): void {
     //
     // Activate user styles.
     //
-    this.#userStyles.forEach(({style}) => {
+    this.#userStyles.forEach(({ style }) => {
       const styleEl = document.createElement('style');
       styleEl.innerHTML = style;
       document.head.appendChild(styleEl);
     });
 
-    this.#userStyles = [];
+    this.#userStyles.slice(0);
 
     // TODO: I'll convert this to a script tag or Function() call at some point.
     //
     // Run user scripts
     //
-    this.#userScripts.forEach(({script}) => {
+    this.#userScripts.forEach(({ script }) => {
       /* eslint-disable no-eval */
       eval(script);
       /* eslint-enable no-eval */
     });
 
-    this.#userScripts = [];
-
-    const self = this;
+    this.#userScripts.slice(0);
 
     storyStarted(this);
 
-    const parsedQuery = qs.parse(location.search);
+    // Check the query string.
+    // * If a save file name is provided, then load that save slot.
+    // * If a "new-game" query parameter exists, then start a new game
+    // * Otherwise, attempt to load the $default save slot, and start a new game
+    //   otherwise.
+    const queryStr = qs.parse(window.location.search);
+
+    let saveSlot = queryStr['slot'] ?? '$default';
+
+    if (queryStr['newgame'] !== undefined) {
+      saveSlot = '';
+    }
+
+    if (isArray(saveSlot)) {
+      saveSlot = saveSlot[0]!;
+    }
+
+    if (saveSlot) {
+      if (this.tryLoadSession(saveSlot)) {
+        return;
+      }
+    }
 
     this.show(this.startPassage);
   }
@@ -278,17 +326,17 @@ export class Story {
    * story history
    * @param meta - Metadata, as provided in link or form data.
    * @returns {void} - Returns nothing
-   **/
-  show (
-    idOrName: string, 
-    meta: {[key: string]: any} | null = null, 
+   * */
+  show(
+    idOrName: string,
+    meta: { [key: string]: any } | null = null,
     noHistory: boolean = false,
   ): void {
-    var passage = this.getPassage(idOrName);
+    const passage = this.getPassage(idOrName);
 
     if (passage === null) {
       throw new Error(
-        'There is no passage with the ID or name "' + idOrName + '"'
+        `There is no passage with the ID or name "${idOrName}"`,
       );
     }
 
@@ -300,7 +348,7 @@ export class Story {
 
     if (!noHistory) {
       this.pushHistory();
-    }else{
+    } else {
       this.pushEmptyHistory();
     }
 
@@ -315,45 +363,30 @@ export class Story {
    * embedding one passage inside another. In this instance, make sure to use
    * <%= %> instead of <%- %> to avoid incorrectly encoding HTML entities.
    */
-  render (idOrName: string): string {
-    var passage = this.getPassage(idOrName);
+  render(idOrName: string): string {
+    const passage = this.getPassage(idOrName);
 
     if (!passage) {
-      throw new Error('There is no passage with the ID or name ' + idOrName);
+      throw new Error(`There is no passage with the ID or name ${idOrName}`);
     }
 
     return passage.render();
   }
 
-  getPassage(idOrName: string): Passage | null{
-
-    let passage = this.#passages[idOrName];
-
-    if (!passage){
-      passage = this._passageArray.find(p => p.title == idOrName);
-    }
+  getPassage(idOrName: string): Passage | null {
+    // First, search by ID
+    const passage = this.#passages[idOrName]
+      // And if that doesn't work, look for a passage with the same title.
+      ?? Object.values(this.#passages).find((p) => p.title === idOrName);
 
     return passage ?? null;
   }
 
   /**
    * Save the current state of the game to local storage.
-   * @param slotName the name of the save slot.  Defaults to, well, 'default'.
+   * @param slotName the name of the save slot.
    */
-  save (slotName?: string): void {
-    localStorage.setItem(
-      `save_${this.ifid}_${slotName ?? 'default'}`,
-      this.saveHash(),
-    );
-  }
-
-  /**
-   * Returns LZString + compressBase64 Hash.
-   *
-   * @function saveHash
-   * @returns {string} - Returns the LZString hash
-   */
-  saveHash (): string {
+  saveSession(slotName?: string): void {
     const save: SaveState = {
       state: this.state.s,
       globals: this.state.g,
@@ -362,7 +395,11 @@ export class Story {
       history: this.history,
     };
 
-    return LZString.compressToUTF16(JSON.stringify(save));
+    const contents = LZString.compressToUTF16(JSON.stringify(save));
+    localStorage.setItem(
+      `save_${this.ifid}_${slotName}`,
+      contents,
+    );
   }
 
   /**
@@ -373,35 +410,37 @@ export class Story {
    * @returns {boolean} if the restore succeeded
    */
 
-  restore (slotName: string): void {
-    const hash = localStorage.getItem(`save_${this.ifid}_${slotName ?? 'default'}`);
+  tryLoadSession(slotName: string): boolean {
+    const hash = localStorage.getItem(`save_${this.ifid}_${slotName}}`);
 
     if (!hash) {
-      return;;
+      return false;
     }
 
-    const { 
-      state, 
-      passageName, 
-      meta, 
-      globals, 
-      history, 
+    const {
+      state,
+      passageName,
+      meta,
+      globals,
+      history,
     } = JSON.parse(LZString.decompressFromUTF16(hash)!) as SaveState;
 
     this.state.s = state;
-    this.#passage = this.getPassage(passageName)!;
-    this.meta = meta;
     this.state.g = globals;
     this.history = history;
 
+    this.show(passageName, meta);
+
     passageShown(this, this.passage, meta);
+
+    return true;
   }
 
   restoreFromStorage() {
     const hash = localStorage.getItem(this.ifid);
 
-    if (hash){
-      this.restore(hash);
+    if (hash) {
+      this.tryLoadSession(hash);
     }
 
     // TODO Restore Event

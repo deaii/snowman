@@ -1,34 +1,62 @@
-import { onPassageShown } from "../events/passageShown";
+import { onPassageShown } from '../events';
+import renderPassage from '../util/renderPassage';
 
 export class WidgetElement extends HTMLDivElement {
     #passageName: string;
+
+    #source: string;
+
     #priority: number;
 
+    #passageDiv?: HTMLDivElement;
+
+    #sourceDiv?: HTMLDivElement;
+
+    declare shadowRoot: ShadowRoot;
+
     constructor() {
-        super();
+      super();
 
-        this.#passageName = this.getAttribute("passage") ?? '';
-        this.#priority = Number.parseFloat(this.getAttribute("priority") ?? "0");
+      this.attachShadow({ mode: 'open' });
 
-        const self = this;
+      this.#passageName = this.getAttribute('passage') ?? '';
+      this.#priority = Number.parseFloat(this.getAttribute('priority') ?? '0');
+      this.#source = this.innerHTML;
 
-        onPassageShown(() => {
-            const { passage: passageName } = self.dataset;
+      if (this.#source) {
+        this.#sourceDiv = document.createElement('div');
+        this.shadowRoot.appendChild(this.#sourceDiv);
+      }
 
-            const passage = (passageName && passageName !== "$current")
-                ? window.story.getPassage(passageName)
-                : window.story.passage;
+      if (this.#passageName) {
+        this.#passageDiv = document.createElement('div');
+        this.shadowRoot.appendChild(this.#passageDiv);
+      }
 
-            if (passage){
-                const parser = new DOMParser();
-                this.innerHTML = passage.render();
-            }else{
-                this.innerHTML = `<div class="alert alert-warning" role="alert">Could not find passage "${passageName}".</div>`
-            }
-        }, self.#priority);
+      onPassageShown(this.render.bind(this), this.#priority);
+    }
+
+    render() {
+      const passageName = this.#passageName;
+
+      if (this.#passageDiv) {
+        const passage = (passageName === '$current')
+          ? window.story.passage
+          : window.story.getPassage(passageName);
+
+        if (passage) {
+          this.#passageDiv.innerHTML = renderPassage(passage.source);
+        } else {
+          this.innerHTML = /* html */`<div class="alert alert-warning" role="alert">Could not find passage "${passageName}".</div>`;
+        }
+      }
+
+      if (this.#sourceDiv) {
+        this.#sourceDiv.innerHTML = renderPassage(this.#source);
+      }
     }
 }
 
 export function setupWidgets() {
-    customElements.define("widget", WidgetElement);
+  customElements.define('widget', WidgetElement);
 }

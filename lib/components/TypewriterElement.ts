@@ -1,161 +1,161 @@
 const HIDDEN_CLASS = 'sm-h';
 const PAUSE_CLASS = 'sm-pause';
 
-export class TypewriterElement extends HTMLDivElement {
+function breakText(textNode: Node, parent: Node, className: string): HTMLSpanElement[] {
+  const outerSpan = document.createElement('span');
+  parent.replaceChild(outerSpan, textNode);
+  const text = textNode.textContent ?? '';
 
-    #spans: (HTMLElement | null)[];
-    #progress = 0;
-    #intervalSeconds: number;
-    #paused: boolean;
+  let whitespace = '';
 
-    #intervalId: number | null = null;
+  const splitStr: string[] = [];
 
-    constructor() {
-        super();
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i]!;
 
-        const root = this.attachShadow({mode: 'open'});
+    if (/\s/.test(char)) {
+      whitespace += char;
+    } else {
+      if (whitespace) {
+        splitStr.push(whitespace);
+        whitespace = '';
+      }
 
-        const duplicates: Node[] = []; 
-
-        this.#spans = [];
-
-        this.childNodes.forEach(node => {
-            var clone = node.cloneNode(true);
-            root.appendChild(clone);
-            this.#spans.push(...breakTextNodes(clone, root, HIDDEN_CLASS));
-        });
-
-        this.#paused = !!this.dataset['paused'];
-        this.#intervalSeconds = Number.parseFloat(this.dataset['interval'] ?? '0.125');
+      splitStr.push(char);
     }
+  }
 
-    static timedNext(e: TypewriterElement) {
-        e.next();
-        if (!e.done && (e.#intervalId !== null)) {
-            clearInterval(e.#intervalId);
-            e.#intervalId = null;
-        }
-    }
+  if (whitespace) {
+    splitStr.push(whitespace);
+  }
 
-    private _disable() {
-        if (this.#intervalId !== null){
-            clearInterval(this.#intervalId);
-            this.#intervalId = null;
-        }
-    }
+  return splitStr.map((str) => {
+    const rVal = new HTMLSpanElement();
+    rVal.className = className;
+    rVal.textContent = str;
 
-    private _enable() {
-        if ((this.#intervalId === null) && !this.#paused && this.isConnected && !this.done) {
-            this.#intervalId = setInterval(
-                TypewriterElement.timedNext, 
-                this.#intervalSeconds, 
-            this);
-        }
-    }
-
-    next() {
-        if (!this.done){
-            this.#spans[this.#progress]!.classList.remove(HIDDEN_CLASS);
-            this.#progress += 1;
-
-            while (this.#spans[this.#progress]!.classList.contains(PAUSE_CLASS)) {
-                this.#progress += 1;
-                this.#paused = true;
-            }
-        } else {
-            this._disable();
-        }
-    }
-
-    pause() {
-        this.#paused = true;
-        this._disable();
-    }
-
-    resume() {
-        this.#paused = false;
-        this._enable();
-    }
-
-    reset() {
-        for (let i = this.#progress - 1; i >= 0; i--){
-            this.#spans[i]!.classList.add(HIDDEN_CLASS);
-        }
-    }
-
-    finish() {
-        for (let i = this.#progress; i < this.#spans.length; i++){
-            this.#spans[i]!.classList.remove(HIDDEN_CLASS);
-        }
-
-        this.#progress = this.#spans.length;
-        this._disable();
-    }
-
-    get done() {
-        return this.#progress >= this.#spans.length;
-    }
-
-    connectedCallback() {
-        this._enable();
-    }
-
-    disconnectedCallback() {
-        this._disable();
-    }
+    return rVal;
+  });
 }
 
 function breakTextNodes(node: Node, parent: Node, textClassName: string): HTMLSpanElement[] {
-    if (node.nodeType === Node.TEXT_NODE) {
-        return breakText(node, parent, textClassName);
-    } else {
-        const rVal: HTMLSpanElement[] = [];
+  if (node.nodeType === Node.TEXT_NODE) {
+    return breakText(node, parent, textClassName);
+  }
+  const rVal: HTMLSpanElement[] = [];
 
-        node.childNodes.forEach(child => (
-            rVal.push(...breakTextNodes(child, node, textClassName))
-        ));
+  node.childNodes.forEach((child) => (
+    rVal.push(...breakTextNodes(child, node, textClassName))
+  ));
 
-        return rVal;
-    }
+  return rVal;
 }
 
-function breakText(textNode: Node, parent: Node, className: string): HTMLSpanElement[] {
-    const outerSpan = document.createElement('span');
-    parent.replaceChild(outerSpan, textNode);
-    const text = textNode.textContent ?? '';
+export default class TypewriterElement extends HTMLDivElement {
+  #spans: (HTMLElement | null)[];
 
-    let whitespace = '';
+  #progress = 0;
 
-    let splitStr: string[] = [];
+  #intervalSeconds: number;
 
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i]!;
+  #paused: boolean;
 
-        if (/\s/.test(char)) {
-            whitespace += char;
-        }else{
-            if (whitespace){
-                splitStr.push(whitespace);
-                whitespace = '';
-            }
+  #intervalId: number | null = null;
 
-            splitStr.push(char);
-        }
-    }
+  constructor() {
+    super();
 
-    if (whitespace) {
-        splitStr.push(whitespace);
-    }
+    const root = this.attachShadow({ mode: 'open' });
 
-    return splitStr.map(str => {
-        const rVal = new HTMLSpanElement();
-        rVal.className = className;
-        rVal.textContent = str;
-    
-        return rVal;
+    this.#spans = [];
+
+    this.childNodes.forEach((node) => {
+      const clone = node.cloneNode(true);
+      root.appendChild(clone);
+      this.#spans.push(...breakTextNodes(clone, root, HIDDEN_CLASS));
     });
+
+    this.#paused = !!this.dataset['paused'];
+    this.#intervalSeconds = Number.parseFloat(this.dataset['interval'] ?? '0.125');
+  }
+
+  static timedNext(e: TypewriterElement) {
+    e.next();
+    if (!e.done && (e.#intervalId !== null)) {
+      clearInterval(e.#intervalId);
+      e.#intervalId = null;
+    }
+  }
+
+  private private_disable() {
+    if (this.#intervalId !== null) {
+      clearInterval(this.#intervalId);
+      this.#intervalId = null;
+    }
+  }
+
+  private private_enable() {
+    if ((this.#intervalId === null) && !this.#paused && this.isConnected && !this.done) {
+      this.#intervalId = setInterval(
+        TypewriterElement.timedNext,
+        this.#intervalSeconds,
+        this,
+      );
+    }
+  }
+
+  next() {
+    if (!this.done) {
+      this.#spans[this.#progress]!.classList.remove(HIDDEN_CLASS);
+      this.#progress += 1;
+
+      while (this.#spans[this.#progress]!.classList.contains(PAUSE_CLASS)) {
+        this.#progress += 1;
+        this.#paused = true;
+      }
+    } else {
+      this.private_disable();
+    }
+  }
+
+  pause() {
+    this.#paused = true;
+    this.private_disable();
+  }
+
+  resume() {
+    this.#paused = false;
+    this.private_enable();
+  }
+
+  reset() {
+    for (let i = this.#progress - 1; i >= 0; i -= 1) {
+      this.#spans[i]!.classList.add(HIDDEN_CLASS);
+    }
+  }
+
+  finish() {
+    for (let i = this.#progress; i < this.#spans.length; i += 1) {
+      this.#spans[i]!.classList.remove(HIDDEN_CLASS);
+    }
+
+    this.#progress = this.#spans.length;
+    this.private_disable();
+  }
+
+  get done() {
+    return this.#progress >= this.#spans.length;
+  }
+
+  connectedCallback() {
+    this.private_enable();
+  }
+
+  disconnectedCallback() {
+    this.private_disable();
+  }
 }
 
 export function enableTypewriter() {
-    customElements.define('typewriter', TypewriterElement);
+  customElements.define('typewriter', TypewriterElement);
 }

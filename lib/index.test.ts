@@ -1,4 +1,3 @@
-
 import type { LoDashStatic } from 'lodash';
 import type { MarkedOptions } from 'marked';
 
@@ -7,18 +6,17 @@ import $ from 'jquery';
 import bootstrap from 'bootstrap';
 import marked from 'marked';
 
-import { Story } from './Story';
+import Story from './Story';
 
-import { Config } from './Config';
-import { setupComponents } from './components/setup';
+import Config from './Config';
+import setupComponents from './components/setupComponents';
 
 import './src/b.css';
 
-declare global
-{
+declare global {
   interface Window {
     story: Story;
-    formdata: {[key: string]: string};
+    formdata: { [key: string]: string };
     config: Config;
 
     _: LoDashStatic;
@@ -40,7 +38,7 @@ function onDocLoad() {
 
   const storyData = document.querySelector('tw-storydata') as HTMLElement;
 
-  window.story = new Story(storyData);
+  window.story = new Story(document, storyData);
   document.removeEventListener('load', onDocLoad);
 }
 

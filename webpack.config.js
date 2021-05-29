@@ -2,6 +2,7 @@ const path = require('path');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
+const ESLintPlugin = require('eslint-webpack-plugin');
 
 module.exports = {
   mode: 'production',
@@ -48,7 +49,9 @@ module.exports = {
   },
   plugins: [
     new MiniCssExtractPlugin(),
-    require('autoprefixer')
+    require('autoprefixer'),
+    new ESLintPlugin({ files: 'lib/**/*.ts', })
+
   ],
   resolve: {
     extensions: ['.tsx', '.ts', '.js']

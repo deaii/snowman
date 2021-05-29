@@ -1,19 +1,14 @@
-
 import type { MarkedOptions } from 'marked';
 import type { LoDashStatic } from 'lodash';
 
-import { Story } from './Story';
+import Story from './Story';
 
 import './src/b.css';
 
-import { setupComponents } from './components/setup';
+import setupComponents from './components/setupComponents';
 
-declare global
-{
+declare global {
   interface Window {
-    story: Story;
-    formdata: {[key: string]: string};
-
     // These are loaded by the HTML via CDNJS
     _: LoDashStatic;
     $: JQueryStatic;
@@ -24,12 +19,9 @@ declare global
 setupComponents();
 
 function onDocLoad() {
-  window.config = {};
-  window.formdata = {};
-
   const storyData = document.querySelector('tw-storydata') as HTMLElement;
 
-  window.story = new Story(storyData);
+  window.story = new Story(document, storyData);
   document.removeEventListener('load', onDocLoad);
 }
 
