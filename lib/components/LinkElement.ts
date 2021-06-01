@@ -6,8 +6,6 @@ export default class LinkElement extends HTMLButtonElement {
 
     #meta: { [key: string]: any };
 
-    #persist: boolean;
-
     get passage() {
       return this.#passage || '';
     }
@@ -16,22 +14,16 @@ export default class LinkElement extends HTMLButtonElement {
       return this.#meta;
     }
 
-    get persist() {
-      return this.#persist;
-    }
-
     constructor() {
       super();
       this.type = 'button';
 
       const passage = this.getAttribute('passage');
       const meta = this.getAttribute('meta');
-      const persist = this.hasAttribute('persist');
 
-      this.disabled = !passage || !window.story.getPassage(passage);
+      this.disabled = !passage || !window.sm.story.hasPassage(passage);
       this.#passage = passage || '';
       this.#meta = meta ? JSON.parse(meta) : {};
-      this.#persist = !!persist;
 
       this.classList.add('btn', 'btn-primary', 'btn-sm');
 
@@ -40,11 +32,9 @@ export default class LinkElement extends HTMLButtonElement {
       this.onclick = (e: MouseEvent) => {
         e.stopPropagation();
         if (!self.disabled) {
-          const metaObj = this.persist
-            ? { ...this.#meta, ...window.formdata }
-            : this.#meta;
+          const metaObj = this.#meta;
 
-          window.story.show(self.#passage, metaObj);
+          window.sm.engine.showAsync(self.#passage, metaObj);
         }
       };
     }

@@ -1,40 +1,16 @@
 {
-  "name": "snowman",
-  "version": "2.0.3",
-  "description": "A minimal story format for authors more experienced with HTML, CSS, and JavaScript. See its <a href='https://videlais.github.io/snowman/2/' target='_blank' rel='noopener noreferrer'>documentation</a>.",
+  "name": "pierogi",
+  "version": "0.0.1",
+  "description": "A minimal story format for authors more experienced with HTML, CSS, and JavaScript.",
   "license": "MIT",
   "repository": "https://github.com/videlais/snowman/",
   "scripts": {
     "lint": "eslint lib/**/*.ts",
-    "check": "tsc lib/index.ts",
-    "build:ts": "webpack",
+    "lint:fix": "eslint lib/**/*.ts --fix",
+    "build:ts": "webpack --config webpack.config.js",
+    "build:ts-full": "webpack --config webpack.config.full.js",
     "build:format": "node --trace-warnings scripts/build-format.js",
-    "build": "npm-run-all build:ts build:format",
-    "report-coverage": "nyc report --reporter=text-lcov > coverage.lcov",
-    "storybook": "start-storybook -p 6006",
-    "build-storybook": "build-storybook"
-  },
-  "ext": {
-    "lodash": {
-      "url": "https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js",
-      "sri": "sha256-qXBd/EfAdjOA2FGrGAG+b3YBn2tn5A6bhz+LSgYD96k="
-    },
-    "jquery": {
-      "url": "https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js",
-      "sri": "sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
-    },
-    "bootstrap": {
-      "url": "https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.min.js",
-      "sri": "sha256-d+FygkWgwt59CFkWPuCB4RE6p1/WiUYCy16w1+c5vKk="
-    },
-    "bootstrap_css": {
-      "url": "https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css",
-      "sri": "sha256-hHKA3d/HttC8OW3Sl093W8DoZudhHJDj++kZYo6MLzA="
-    },
-    "marked": {
-      "url": "https://cdn.jsdelivr.net/npm/marked@2.0.6/marked.min.js",
-      "sri": "sha256-5mxfKyDdPamB5uhqAheo4B5uJKxwKnLtCUaKSD32QIU="
-    }
+    "build": "npm-run-all build:ts build:ts-full build:format"
   },
   "keywords": [
     "twine",
@@ -42,14 +18,15 @@
   ],
   "author": "Dan Cox",
   "dependencies": {
-    "@babel/polyfill": "^7.12.1",
     "@popperjs/core": "^2.9.2",
-    "babel-core": "^6.26.3",
     "bootstrap": "^5.0.1",
+    "ejs": "^3.1.6",
     "jquery": "^3.6.0",
+    "jsdom": "^16.6.0",
     "lodash": "^4.17.21",
     "lz-string": "^1.4.4",
     "marked": "^2.0.3",
+    "object-path": "^0.11.5",
     "query-string": "^7.0.0"
   },
   "devDependencies": {
@@ -58,21 +35,22 @@
     "@babel/plugin-proposal-object-rest-spread": "^7.13.8",
     "@babel/preset-env": "^7.13.10",
     "@babel/preset-typescript": "^7.13.0",
-    "@storybook/addon-actions": "^6.2.9",
-    "@storybook/addon-essentials": "^6.2.9",
-    "@storybook/addon-links": "^6.2.9",
-    "@storybook/html": "^6.2.9",
     "@types/bootstrap": "^5.0.15",
+    "@types/ejs": "^3.0.6",
+    "@types/jest": "^26.0.23",
     "@types/jquery": "^3.5.5",
-    "@types/lodash": "^4.14.168",
+    "@types/jsdom": "^16.2.10",
+    "@types/lodash": "^4.14.170",
     "@types/lz-string": "^1.3.34",
     "@types/marked": "^2.0.2",
+    "@types/object-path": "^0.11.0",
     "@typescript-eslint/eslint-plugin": "^4.25.0",
+    "@typescript-eslint/parser": "^4.26.0",
     "autoprefixer": "^10.2.5",
+    "babel-core": "^6.26.3",
     "babel-loader": "^8.2.2",
     "css-loader": "^5.1.2",
     "css-minimizer-webpack-plugin": "^1.3.0",
-    "ejs": "^3.1.6",
     "eslint": "^7.26.0",
     "eslint-config-airbnb-typescript": "^12.3.1",
     "eslint-plugin-import": "^2.23.3",
@@ -81,16 +59,20 @@
     "eslint-plugin-react-hooks": "^4.2.0",
     "eslint-webpack-plugin": "^2.5.4",
     "html-minifier": "^4.0.0",
+    "html-webpack-plugin": "^5.3.1",
+    "jest": "^27.0.3",
     "mini-css-extract-plugin": "^1.3.9",
-    "normalize-css": "^2.3.1",
+    "normalize.css": "^8.0.1",
     "npm-run-all": "^4.1.5",
+    "null-loader": "^4.0.1",
     "sass": "^1.34.0",
     "sass-loader": "^11.1.1",
     "style-loader": "^2.0.0",
     "terser-webpack-plugin": "^4.2.3",
+    "ts-jest": "^27.0.1",
     "ts-loader": "^8.0.18",
     "ts-node": "^9.1.1",
-    "typescript": "^4.2.4",
+    "typescript": "^4.3.2",
     "url-join": "^4.0.1",
     "webpack": "^5.37.1",
     "webpack-cli": "^4.7.0"

@@ -7,6 +7,9 @@ pids
 # temporary build directory
 build/
 
+# Build output (at least until build is confirmed to work
+dist/
+
 # nyc test coverage
 .nyc_output
 

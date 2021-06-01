@@ -1,15 +1,17 @@
 import GameFormElement from './GameFormElement';
-import { setupModal } from './ModalLinkElement';
-import { setupWidgets } from './WidgetElement';
-import { setupToggle } from './ToggleElement';
+import WidgetElement from './WidgetElement';
+import ToggleElement from './ToggleElement';
 import LinkElement from './LinkElement';
 import MarkdownElement from './PassageElement';
+import { setupModal } from './ModalLinkElement';
+import StoryErrorElement from './StoryErrorElement';
 
 export default function setupComponents() {
+  customElements.define('story-error', StoryErrorElement);
   customElements.define('game-form', GameFormElement);
   customElements.define('game-link', LinkElement);
   customElements.define('markdown', MarkdownElement);
   setupModal();
-  setupWidgets();
-  setupToggle();
+  customElements.define('widget', WidgetElement);
+  customElements.define('toggle', ToggleElement);
 }

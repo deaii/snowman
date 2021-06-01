@@ -1,21 +1,36 @@
+import ejs from 'ejs';
+
 import renderMarkdown from './renderMarkdown';
 import type { PassageTags } from '../Passage';
+import type Passage from '../Passage';
 
-export default function renderSource(
-  source: string,
+/* eslint-disable no-param-reassign */
+export default function renderPassage(
+  passage: string | Passage,
   tags?: PassageTags,
 ): string {
+  let result = '';
+  let isHtml = !!tags && !!tags['html'];
+
   // Test if 'source' is defined or not.  If not defined, return an empty
   // string.
-  if (!(typeof source !== 'undefined' && source !== null)) {
-    return '';
+  if (!passage) {
+    return result;
   }
 
-  let result = '';
+  if (typeof passage === 'string') {
+    result = ejs.compile(passage)(window.sm.state);
+  } else {
+    isHtml &&= !!passage.tags && !!passage.tags['html'];
 
-  result = window._.template(source)(window.story.state);
+    if (!passage.template) {
+      passage.template = ejs.compile(passage.text);
+    }
 
-  if (tags && tags['html']) {
+    result = passage.template(window.sm.state);
+  }
+
+  if (isHtml) {
     return result;
   }
 

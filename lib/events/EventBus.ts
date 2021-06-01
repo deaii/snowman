@@ -18,38 +18,47 @@ export default class EventBus<
   U extends Event = Event,
   V extends EventTarget = EventTarget,
 > {
-    #name : T;
-
     #sortedList: SortedArray<EventBusEntry<U>>;
 
-    #target: V;
+    #target?: V;
 
-    #ecb: (this:V, e: U) => void;
+    #name : T;
 
-    constructor(name: T, target: V) {
+    #ecb?: (this:V, e: U) => void;
+
+    constructor(name: T, target?: V) {
       this.#name = name;
-      this.#ecb = this.eventCallback.bind(this);
       this.#target = target;
       this.#sortedList = new SortedArray<EventBusEntry<U>>(comparator);
 
       const self = this;
 
-      this.#ecb = function EventCallBack(this: V, ev: U) {
-        self.#sortedList.forEach(([, cb]) => cb(ev));
-      };
+      if (target) {
+        this.#ecb = function EventCallBack(this: V, ev: U) {
+          self.#sortedList.forEach(([, cb]) => cb(ev));
+        };
 
-      target.addEventListener(name as any, this.#ecb as any);
+        target.addEventListener(name, this.#ecb as any);
+      }
     }
 
-    addListener(cb: (e: U) => void, order: number = 0) {
+    addCallback(cb: (e: U) => void, order: number = 0) {
       this.#sortedList.add([order, cb.bind(this.#target)]);
     }
 
-    dispose() {
-      window.removeEventListener(this.#name as any, this.#ecb as any);
+    callback(ev: U) {
+      this.#sortedList.forEach(([, cb]) => cb(ev));
     }
 
-    private eventCallback(e: U): void {
-      this.#sortedList.forEach(([, cb]) => cb(e));
+    dispatch(ev: U) {
+      if (this.#target) {
+        this.#target.dispatchEvent(ev);
+      } else {
+        this.callback(ev);
+      }
+    }
+
+    dispose() {
+      window.removeEventListener(this.#name, this.#ecb as any);
     }
 }

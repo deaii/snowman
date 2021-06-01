@@ -1,5 +1,8 @@
-import type { Modal } from 'bootstrap';
-import { onPassageShown } from '../events/passageShown';
+// @ts-ignore
+import Modal from 'bootstrap/js/src/modal';
+
+import renderPassage from '../util/renderPassage';
+import renderTitle from '../util/renderTitle';
 
 const MODAL_ID = 'sm-modal';
 const MODAL_TITLE_ID = 'sm-modal-title';
@@ -10,7 +13,13 @@ let titleEl: HTMLHeadingElement;
 let bodyEl: HTMLDivElement;
 let footerEl: HTMLDivElement;
 let modalEl: HTMLDivElement;
-let modal: Modal;
+let modal: typeof Modal;
+
+/* eslint-disable-next-line operator-linebreak */
+const spinnerHtml = /* html */
+`<div class="spinner-border spinner-border-sm text-primary" role="status">
+  <span class="visually-hidden">Loading...</span>
+</div>`;
 
 export default class ModalLinkElement extends HTMLButtonElement {
   constructor() {
@@ -19,32 +28,39 @@ export default class ModalLinkElement extends HTMLButtonElement {
   }
 
   onClickEvent() {
-    let header = this.getAttribute('header');
-    let footer = this.getAttribute('footer');
-    let body = this.getAttribute('body');
-    const passage = this.getAttribute('passage');
-    const headerPsg = this.getAttribute('header-passage');
+    const bodyPsg = this.getAttribute('passage');
     const footerPsg = this.getAttribute('footer-passage');
 
-    if (passage) {
-      body = window.story.getPassage(passage)?.render()
-                ?? `[Invalid passage "${passage}"]`;
-    }
-
-    if (headerPsg) {
-      header = window.story.getPassage(headerPsg)?.render()
-                ?? `[Invalid passage "${headerPsg}"]`;
+    if (bodyPsg) {
+      bodyEl.innerHTML = spinnerHtml;
+      titleEl.innerHTML = spinnerHtml;
+      window.sm.story.getPassageAsync(bodyPsg).then((passage) => {
+        if (passage) {
+          bodyEl.innerHTML = renderPassage(passage);
+          titleEl.innerHTML = renderTitle(passage.title, passage);
+        } else {
+          bodyEl.innerText = `[Invalid passage "${bodyPsg}"]`;
+          titleEl.innerText = 'error';
+        }
+      });
+    } else {
+      bodyEl.innerHTML = this.getAttribute('body') ?? '';
+      titleEl.innerHTML = this.getAttribute('title') ?? '';
     }
 
     if (footerPsg) {
-      footer = window.story.getPassage(footerPsg)?.render()
-                ?? `[invalid passage "${footerPsg}"]`;
+      footerEl.hidden = false;
+      footerEl.innerHTML = spinnerHtml;
+      window.sm.story.getPassageAsync(footerPsg).then((passage) => {
+        footerEl.innerHTML = passage
+          ? renderPassage(passage)
+          : `[Invalid passage "${passage}"]`;
+      });
+    } else {
+      const footer = this.getAttribute('footer') ?? '';
+      footerEl.innerHTML = footer;
+      footerEl.hidden = !footer;
     }
-
-    titleEl.innerHTML = header ?? '';
-    bodyEl.innerHTML = body ?? '';
-    footerEl.innerHTML = footer ?? '';
-    footerEl.hidden = !footer;
 
     modal.show();
   }
@@ -62,9 +78,9 @@ export function setupModal() {
   // This needs to be loaded after Bootstrap.
   window.addEventListener('load', () => {
     // Make sure the modal hides when a new passage is shown.
-    onPassageShown(() => modal.hide());
+    window.sm.events.onPassageShown(() => modal.hide());
 
     // And set up our modal via bootstrap.
-    modal = new window.bootstrap.Modal(modalEl);
+    modal = new Modal(modalEl);
   });
 }

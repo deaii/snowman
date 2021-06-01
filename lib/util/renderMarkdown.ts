@@ -1,3 +1,6 @@
+import { Renderer } from 'marked';
+
+import { escape } from '../lodash';
 import renderAttrs from './renderAttrs';
 
 const LINK_REGEX = /(\{([^\n}'"]*)})?\[\[(.*?)(\|(.*?))?\s*(\{.*\})?\]\]/gi;
@@ -15,23 +18,23 @@ export default function renderMarkdown(result: string): string {
   /* [[links]] with or without extra markup {#id.class} */
   let newResult = result.replace(LINK_REGEX, (...args: string[]) => {
     const style = args[STYLE_GROUP];
-    const display = args[DISPLAY_GROUP];
-    const passage = args[PASSAGE_NAME_GROUP] ?? display;
-    const json = args[JSON_GROUP];
+    const display = args[DISPLAY_GROUP] ?? '';
+    const passage = args[PASSAGE_NAME_GROUP] ?? display ?? '';
+    const json = args[JSON_GROUP] ?? '';
 
     return /* html */ `
       <game-link
-         passage="${window._.escape(passage)}"
-         formdata="${window._.escape(json)}"
+         passage="${escape(passage)}"
+         formdata="${escape(json)}"
          ${renderAttrs(style)}
       >
-        ${window._.escape(display)}
+        ${escape(display)}
       </a>`.replace(LINK_TRIM_REGEX, ' ');
   });
 
   // Prevent template() from triggering markdown code blocks
   // Skip producing code blocks completely
-  const renderer = new window.marked.Renderer();
+  const renderer = new Renderer();
   renderer.code = (code) => code;
 
   window.marked.setOptions({ smartypants: true, renderer });

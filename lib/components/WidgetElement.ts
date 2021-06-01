@@ -1,62 +1,75 @@
-import { onPassageShown } from '../events';
+import Passage from '../Passage';
 import renderPassage from '../util/renderPassage';
 
-export class WidgetElement extends HTMLDivElement {
-    #passageName: string;
+export default class WidgetElement extends HTMLDivElement {
+  #passageName: string;
 
-    #source: string;
+  #passagePromise?: Promise<Passage | null>;
 
-    #priority: number;
+  readonly #priority: number;
 
-    #passageDiv?: HTMLDivElement;
+  readonly #passageDiv?: HTMLDivElement;
 
-    #sourceDiv?: HTMLDivElement;
+  #source: string;
 
-    declare shadowRoot: ShadowRoot;
+  #sourceDiv?: HTMLDivElement;
 
-    constructor() {
-      super();
+  constructor() {
+    super();
 
-      this.attachShadow({ mode: 'open' });
+    this.attachShadow({ mode: 'open' });
 
-      this.#passageName = this.getAttribute('passage') ?? '';
-      this.#priority = Number.parseFloat(this.getAttribute('priority') ?? '0');
-      this.#source = this.innerHTML;
+    this.#passageName = this.getAttribute('passage') ?? '';
+    this.#priority = Number.parseFloat(this.getAttribute('priority') ?? '0');
+    this.#source = this.innerHTML;
 
-      if (this.#source) {
-        this.#sourceDiv = document.createElement('div');
-        this.shadowRoot.appendChild(this.#sourceDiv);
-      }
-
-      if (this.#passageName) {
-        this.#passageDiv = document.createElement('div');
-        this.shadowRoot.appendChild(this.#passageDiv);
-      }
-
-      onPassageShown(this.render.bind(this), this.#priority);
+    if (this.#passageName) {
+      this.#passageDiv = document.createElement('div');
+      this.shadowRoot!.appendChild(this.#passageDiv);
     }
 
-    render() {
-      const passageName = this.#passageName;
+    if (this.#source) {
+      this.#sourceDiv = document.createElement('div');
+      this.shadowRoot!.appendChild(this.#sourceDiv);
+    }
 
-      if (this.#passageDiv) {
-        const passage = (passageName === '$current')
-          ? window.story.passage
-          : window.story.getPassage(passageName);
+    window.sm.events.onPassageShown(this.render.bind(this), this.#priority);
+  }
 
+  render() {
+    const passageName = this.#passageName;
+
+    if (this.#passageDiv) {
+      let promise;
+
+      if (passageName === '$current') {
+        promise = Promise.resolve(window.sm.passage);
+      } else {
+        if (!this.#passagePromise) {
+          this.#passagePromise = window.sm.story.getPassageAsync(passageName);
+          if (this.#sourceDiv) {
+            this.shadowRoot!.removeChild(this.#sourceDiv);
+            this.#sourceDiv = undefined;
+          }
+        }
+        promise = this.#passagePromise;
+      }
+
+      promise.then((passage) => {
         if (passage) {
-          this.#passageDiv.innerHTML = renderPassage(passage.source);
+          this.#passageDiv!.innerHTML = renderPassage(passage.text);
         } else {
           this.innerHTML = /* html */`<div class="alert alert-warning" role="alert">Could not find passage "${passageName}".</div>`;
         }
-      }
-
-      if (this.#sourceDiv) {
-        this.#sourceDiv.innerHTML = renderPassage(this.#source);
-      }
+      });
     }
+
+    if (this.#sourceDiv) {
+      this.#sourceDiv.innerHTML = renderPassage(this.#source);
+    }
+  }
 }
 
 export function setupWidgets() {
-  customElements.define('widget', WidgetElement);
+
 }

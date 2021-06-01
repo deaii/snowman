@@ -1,6 +1,4 @@
 export const LAYOUT_TAG = 'layout';
-export const SCRIPT_TAG = 'script';
-export const STYLE_TAG = 'style';
 export const CONFIG_TAG = 'config';
 export const HTML_TAG = 'html';
 

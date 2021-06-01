@@ -1,5 +1,18 @@
 export default interface Config {
-  MaxHistory?: boolean;
+  maxHistory?: boolean;
   startingPassage?: string;
   layoutHtml?: string;
+  globals?: string[];
+  twineyTemp?: boolean;
+
+  scripts?: {
+    var: string,
+    href: string,
+    integrity?: string
+  }[];
+
+  styles?: {
+    href: string,
+    integrity?: string
+  };
 }
